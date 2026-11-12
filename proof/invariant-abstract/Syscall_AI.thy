@@ -106,7 +106,7 @@ proof -
   show ?thesis
     unfolding choose_thread_def guarded_switch_to_def
     apply (wpsimp wp: stit_activatable stt_activatable gts_wp)
-    apply (clarsimp simp:  pred_tcb_at_def obj_at_def)
+    apply (fastforce simp: pred_tcb_at_def obj_at_def)
     done
 qed
 

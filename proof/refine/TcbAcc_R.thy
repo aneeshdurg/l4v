@@ -448,7 +448,7 @@ lemma ball_tcb_cte_casesI:
   by (simp add: tcb_cte_cases_def tcb_cte_cases_neqs)
 
 lemma all_tcbI:
-  "\<lbrakk> \<And>a b c d e f g h i j k l m n p q r s t. P (Thread a b c d e f g h i j k l m n p q r s t) \<rbrakk>
+  "\<lbrakk> \<And>a b c d e f g h i j k l m n p q r s t u v. P (Thread a b c d e f g h i j k l m n p q r s t u v) \<rbrakk>
    \<Longrightarrow> \<forall>tcb. P tcb"
   by (rule allI, case_tac tcb, simp)
 
@@ -1988,6 +1988,11 @@ defs ksReadyQueues_asrt_def:
      \<equiv> \<lambda>s'. \<forall>d p. \<exists>ts. ready_queue_relation d p ts (ksReadyQueues s' (d, p))
                                             (tcbSchedNexts_of s') (tcbSchedPrevs_of s')
                                             (inQ d p |< tcbs_of' s')"
+(* The OQueue policy reads a ready queue as the list its linked-list representation denotes.
+   list_queue_relation determines this list, so SOME is deterministic on well-formed queues. *)
+defs oqueueQueueList_def:
+  "oqueueQueueList
+     \<equiv> \<lambda>s' queue. SOME ts. list_queue_relation ts queue (tcbSchedNexts_of s') (tcbSchedPrevs_of s')"
 
 lemma ksReadyQueues_asrt_cross:
   "ready_queues_relation s s' \<Longrightarrow> ksReadyQueues_asrt s'"

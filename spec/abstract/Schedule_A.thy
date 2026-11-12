@@ -71,13 +71,106 @@ definition
 definition max_non_empty_queue :: "(priority \<Rightarrow> ready_queue) \<Rightarrow> ready_queue" where
   "max_non_empty_queue queues \<equiv> queues (Max {prio. queues prio \<noteq> []})"
 
+definition oqueue_remaining_budget ::
+  "'z::state_ext state \<Rightarrow> obj_ref \<Rightarrow> ticks option"
+where
+  "oqueue_remaining_budget s t \<equiv>
+    case get_tcb t s of
+      None \<Rightarrow> None
+    | Some tcb \<Rightarrow>
+        if runnable (tcb_state tcb) then
+          let pending = (if tcb_sched_context tcb = Some (cur_sc s)
+                         then consumed_time s else 0);
+              budget = tcb_oqueue_budget tcb
+          in Some (if budget < pending then 0 else budget - pending)
+        else None"
+
+function oqueue_best ::
+  "'z::state_ext state \<Rightarrow> ready_queue \<Rightarrow> (obj_ref \<times> ticks) option"
+where
+  "oqueue_best s [] = None"
+| "oqueue_best s (t # ts) =
+    (case oqueue_remaining_budget s t of
+       None \<Rightarrow> oqueue_best s ts
+     | Some budget \<Rightarrow>
+         (case oqueue_best s ts of
+            None \<Rightarrow> Some (t, budget)
+          | Some (best, best_budget) \<Rightarrow>
+              if budget \<le> best_budget then Some (t, budget)
+              else Some (best, best_budget)))"
+  by pat_completeness auto
+termination by lexicographic_order
+
+definition oqueue_select ::
+  "'z::state_ext state \<Rightarrow> ready_queue \<Rightarrow> obj_ref option"
+where
+  "oqueue_select s queue \<equiv>
+    case oqueue_best s queue of None \<Rightarrow> None | Some (t, _) \<Rightarrow> Some t"
+lemma oqueue_best_in_queue:
+  "oqueue_best s q = Some (t, b) \<Longrightarrow>
+   t \<in> set q \<and> (\<exists>tcb. get_tcb t s = Some tcb \<and> runnable (tcb_state tcb))"
+proof (induction q arbitrary: t b)
+  case Nil then show ?case by simp
+next
+  case (Cons x xs)
+  show ?case
+    using Cons.prems Cons.IH
+    by (fastforce simp: oqueue_remaining_budget_def Let_def
+                  split: option.splits prod.splits if_splits)
+qed
+
+lemma oqueue_best_not_None:
+  "\<lbrakk>q \<noteq> []; \<forall>t \<in> set q. \<exists>tcb. get_tcb t s = Some tcb \<and> runnable (tcb_state tcb)\<rbrakk>
+   \<Longrightarrow> oqueue_best s q \<noteq> None"
+  by (cases q;
+      fastforce simp: oqueue_remaining_budget_def Let_def
+                split: option.splits prod.splits if_splits)
+
+lemma oqueue_select_in_queue:
+  "oqueue_select s q = Some t \<Longrightarrow>
+   t \<in> set q \<and> (\<exists>tcb. get_tcb t s = Some tcb \<and> runnable (tcb_state tcb))"
+  by (fastforce simp: oqueue_select_def dest: oqueue_best_in_queue split: option.splits)
+
+lemma oqueue_select_not_None:
+  "\<lbrakk>q \<noteq> []; \<forall>t \<in> set q. \<exists>tcb. get_tcb t s = Some tcb \<and> runnable (tcb_state tcb)\<rbrakk>
+   \<Longrightarrow> oqueue_select s q \<noteq> None"
+  by (fastforce simp: oqueue_select_def dest: oqueue_best_not_None split: option.splits)
+
+definition attach_oqueue_policy :: "(bool, 'z::state_ext) s_monad" where
+  "attach_oqueue_policy \<equiv> do
+     active \<leftarrow> gets oqueue_active;
+     if active then return False
+     else do
+       modify (\<lambda>s. s\<lparr>oqueue_active := True\<rparr>);
+       return True
+     od
+   od"
+
+definition detach_oqueue_policy :: "(bool, 'z::state_ext) s_monad" where
+  "detach_oqueue_policy \<equiv> do
+     active \<leftarrow> gets oqueue_active;
+     if active then do
+       modify (\<lambda>s. s\<lparr>oqueue_active := False\<rparr>);
+       return True
+     od else return False
+   od"
+
+
 definition choose_thread :: "(unit, 'z::state_ext) s_monad" where
   "choose_thread \<equiv> do
      d \<leftarrow> gets cur_domain;
      queues \<leftarrow> gets (\<lambda>s. ready_queues s d);
      if \<forall>prio. queues prio = []
      then switch_to_idle_thread
-     else guarded_switch_to (hd (max_non_empty_queue queues))
+     else do
+       active \<leftarrow> gets oqueue_active;
+       if active then do
+         s \<leftarrow> get;
+         candidate \<leftarrow> return (oqueue_select s (max_non_empty_queue queues));
+         assert (candidate \<noteq> None);
+         guarded_switch_to (the candidate)
+       od else guarded_switch_to (hd (max_non_empty_queue queues))
+     od
    od"
 
 text \<open>
@@ -135,14 +228,17 @@ definition
 
            cur_dom \<leftarrow> gets cur_domain;
            highest \<leftarrow> gets (is_highest_prio cur_dom target_prio);
-           if (fastfail \<and> \<not>highest)
+           \<comment> \<open>While the OQueue policy is attached, a direct candidate never bypasses the policy:
+              it is appended to its queue and the new thread is chosen by @{const choose_thread}.\<close>
+           policy_active \<leftarrow> gets oqueue_active;
+           if (fastfail \<and> \<not>highest \<and> \<not>policy_active)
            then do
                \<comment> \<open>Candidate is not best candidate, choose a new thread\<close>
                tcb_sched_action tcb_sched_enqueue candidate;
                set_scheduler_action choose_new_thread;
                schedule_choose_new_thread
              od
-           else if (ct_runnable \<and> ct_prio = target_prio)
+           else if ((ct_runnable \<and> ct_prio = target_prio) \<or> policy_active)
            then do
                \<comment> \<open>Current thread was runnable and candidate is not strictly better
                   want current thread to run next, so append the candidate to end of queue

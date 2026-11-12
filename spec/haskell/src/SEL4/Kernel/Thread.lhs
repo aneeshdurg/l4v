@@ -336,7 +336,6 @@ We check here that the candidate has the highest priority in the system.
 >             SwitchToThread candidate -> do
 >                 wasRunnable <- isRunnable curThread
 >                 when wasRunnable (tcbSchedEnqueue curThread)
->
 >                 idleThread <- getIdleThread
 >                 targetPrio <- threadGet tcbPriority candidate
 >                 curPrio <- threadGet tcbPriority curThread
@@ -344,13 +343,14 @@ We check here that the candidate has the highest priority in the system.
 >
 >                 curDom <- curDomain
 >                 highest <- isHighestPrio curDom targetPrio
+>                 policyActive <- getOQueueActive
 >
->                 if (fastfail && not highest)
+>                 if (fastfail && not highest && not policyActive)
 >                     then do
 >                         tcbSchedEnqueue candidate
 >                         setSchedulerAction ChooseNewThread
 >                         scheduleChooseNewThread
->                     else if wasRunnable && curPrio == targetPrio
+>                     else if ((wasRunnable && curPrio == targetPrio) || policyActive)
 >                             then do
 >                                 tcbSchedAppend candidate
 >                                 setSchedulerAction ChooseNewThread
@@ -406,6 +406,37 @@ Note also that the level 2 bitmap array is stored in reverse in order to get bet
 >             hprio <- getHighestPrio d
 >             return (p >= hprio)
 
+> oqueueEntry :: PPtr TCB -> Kernel (Maybe (PPtr TCB, Ticks))
+> oqueueEntry thread = do
+>     eligible <- isRunnable thread
+>     if eligible
+>         then do
+>             budget <- threadGet tcbOQueueBudget thread
+>             sc <- threadGet tcbSchedContext thread
+>             curSc <- getCurSc
+>             consumed <- getConsumedTime
+>             pending <- return $ if sc == Just curSc then consumed else 0
+>             remaining <- return $ if budget > pending then budget - pending else 0
+>             return (Just (thread, remaining))
+>         else return Nothing
+
+> oqueuePick :: Maybe (PPtr TCB, Ticks) -> Maybe (PPtr TCB, Ticks) -> Maybe (PPtr TCB, Ticks)
+> oqueuePick best entry = case entry of
+>     Nothing -> best
+>     Just (_, budget) -> case best of
+>         Nothing -> entry
+>         Just (_, bestBudget) -> if budget < bestBudget then entry else best
+
+The policy chooses the first minimum-budget eligible member of the queue. The queue is read as a list through the ghost projection "oqueueQueueList", so the selection is a left fold, which keeps the choice stable on ties.
+
+> oqueueSelect :: TcbQueue -> Kernel (PPtr TCB)
+> oqueueSelect queue = do
+>     ks <- get
+>     entries <- mapM oqueueEntry (oqueueQueueList ks queue)
+>     case foldl oqueuePick Nothing entries of
+>         Nothing -> fail "OQueue ready queue has no eligible thread"
+>         Just (thread, _) -> return thread
+
 > chooseThread :: Kernel ()
 > chooseThread = do
 >     stateAssert ksReadyQueues_asrt ""
@@ -416,7 +447,10 @@ Note also that the level 2 bitmap array is stored in reverse in order to get bet
 >         then do
 >             prio <- getHighestPrio curdom
 >             queue <- getQueue curdom prio
->             let thread = fromJust $ tcbQueueHead queue
+>             policyActive <- getOQueueActive
+>             thread <- if policyActive
+>                 then oqueueSelect queue
+>                 else return $ fromJust $ tcbQueueHead queue
 >             runnable <- isRunnable thread
 >             assert runnable "Scheduled a non-runnable thread"
 >             switchToThread thread

@@ -47,6 +47,9 @@ record kernel_state =
   ksCurThread          :: machine_word
   ksIdleThread         :: machine_word
   ksSchedulerAction    :: scheduler_action
+  ksOQueueActive       :: bool
+  ksCurSc              :: machine_word
+  ksConsumedTime       :: "64 word"
   ksInterruptState     :: interrupt_state
   ksWorkUnitsCompleted :: machine_word
   ksArchState          :: Arch.kernel_state
@@ -77,7 +80,7 @@ where
     return r
   od"
 
-#INCLUDE_HASKELL SEL4/Model/StateData.lhs decls_only ONLY capHasProperty ksReadyQueues_asrt ready_qs_runnable idleThreadNotQueued
-#INCLUDE_HASKELL SEL4/Model/StateData.lhs NOT doMachineOp KernelState ReadyQueue Kernel assert stateAssert findM funArray newKernelState capHasProperty ksReadyQueues_asrt ready_qs_runnable idleThreadNotQueued
+#INCLUDE_HASKELL SEL4/Model/StateData.lhs decls_only ONLY capHasProperty oqueueQueueList ksReadyQueues_asrt ready_qs_runnable idleThreadNotQueued
+#INCLUDE_HASKELL SEL4/Model/StateData.lhs NOT doMachineOp KernelState ReadyQueue Kernel assert stateAssert findM funArray newKernelState capHasProperty oqueueQueueList ksReadyQueues_asrt ready_qs_runnable idleThreadNotQueued
 
 end

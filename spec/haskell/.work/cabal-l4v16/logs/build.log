@@ -1,0 +1,133 @@
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: InstallOk
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: BuildFailed
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: InstallOk
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: InstallOk
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: InstallOk
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: InstallOk
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+
+
+package:         SEL4-13
+os:              linux
+arch:            x86_64
+compiler:        ghc-9.2.8
+client:          cabal-install-3.16.1.0
+flags:           +archaarch64 -archarm -archarmhyp -archriscv -archx64 -ffi
+dependencies:
+    array-0.5.4.0
+    base-4.16.4.0
+    containers-0.6.5.1
+    mtl-2.2.2
+    transformers-0.5.6.2
+    unix-2.7.2.2
+
+install-outcome: InstallOk
+docs-outcome:    NotTried
+tests-outcome:   NotTried
+

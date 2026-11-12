@@ -1226,6 +1226,11 @@ lemma next_thread_queued: "queues p \<noteq> [] \<Longrightarrow> \<exists>p. ne
   apply blast
   done
 
+lemma oqueue_select_queued:
+  "oqueue_select s (max_non_empty_queue (ready_queues s d)) = Some y \<Longrightarrow>
+   \<exists>p. y \<in> set (ready_queues s d p)"
+  by (fastforce simp: max_non_empty_queue_def dest: oqueue_select_in_queue)
+
 context DetSchedSchedule_AI begin
 
 crunch switch_to_idle_thread
@@ -1249,6 +1254,12 @@ lemma choose_thread_valid_sched[wp]:
    \<lbrace>\<lambda>_. valid_sched :: det_state \<Rightarrow> _\<rbrace>"
   apply (simp add: choose_thread_def)
   apply (wp guarded_switch_to_lift switch_to_idle_thread_valid_sched switch_to_thread_valid_sched)
+  apply (case_tac "oqueue_active s")
+   apply (case_tac "oqueue_select s (max_non_empty_queue (ready_queues s (cur_domain s)))")
+    apply clarsimp
+   apply (frule oqueue_select_queued)
+   apply (clarsimp simp: valid_queues_def is_activatable_2_def)
+   apply (fastforce simp: st_tcb_def2 in_cur_domain_def etcb_at_def split: option.splits)
   apply (clarsimp simp: valid_queues_def next_thread_def is_activatable_2_def
                  dest!: next_thread_queued)
   apply (fastforce simp: st_tcb_def2 in_cur_domain_def etcb_at_def split: option.splits)
@@ -1358,6 +1369,10 @@ lemma choose_thread_ct_activatable:
   apply (wpsimp simp: choose_thread_def
                 wp: guarded_switch_to_lift stit_activatable'[simplified ct_in_state_def]
                     stt_activatable[simplified ct_in_state_def])
+  apply (intro conjI impI)
+   apply clarsimp
+   apply (frule oqueue_select_queued)
+   apply (fastforce simp: valid_queues_def is_activatable_def in_cur_domain_def)
   apply (fastforce dest!: next_thread_queued
                    simp: next_thread_def valid_queues_def is_activatable_def in_cur_domain_def)
   done
@@ -1373,6 +1388,11 @@ lemma choose_thread_cur_dom_or_idle:
      apply (rule hoare_disjI1) (* in current domain *)
      apply (wp guarded_switch_to_lift)+
   apply clarsimp
+  apply (intro conjI impI)
+   apply clarsimp
+   apply (frule oqueue_select_queued)
+   apply (fastforce split: option.splits
+                    simp: etcb_at_def valid_queues_def in_cur_domain_def)
   apply (fastforce dest!: next_thread_queued split: option.splits
                    simp: etcb_at_def next_thread_def valid_queues_def in_cur_domain_def)
   done

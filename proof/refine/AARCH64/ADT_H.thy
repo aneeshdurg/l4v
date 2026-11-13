@@ -285,7 +285,6 @@ definition
       tcb_ipc_buffer = tcbIPCBuffer tcb,
       tcb_fault = map_option FaultMap (tcbFault tcb),
       tcb_bound_notification = tcbBoundNotification tcb,
-      tcb_oqueue_budget = tcbOQueueBudget tcb,
       tcb_mcpriority = tcbMCP tcb,
       tcb_priority = tcbPriority tcb,
       tcb_time_slice = tcbTimeSlice tcb,

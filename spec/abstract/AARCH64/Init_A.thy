@@ -80,7 +80,6 @@ definition init_kheap :: kheap where
          tcb_ipc_buffer = 0,
          tcb_fault = None,
          tcb_bound_notification = None,
-         tcb_oqueue_budget = 0,
          tcb_mcpriority = minBound,
          tcb_priority = 0,
          tcb_time_slice = timeSlice,

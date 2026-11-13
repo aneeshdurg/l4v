@@ -348,9 +348,26 @@ lemma guarded_switch_to_empty_fail[intro!, wp, simp]:
   "empty_fail (guarded_switch_to thread :: (unit,'state_ext) s_monad)"
   by (wpsimp simp: guarded_switch_to_def)
 
+lemma max_non_empty_queue_ne:
+  assumes h: "\<not> (\<forall>p. queues p = [])"
+  shows "max_non_empty_queue queues \<noteq> []"
+proof -
+  from h have e: "\<exists>p. queues p \<noteq> []" by auto
+  then obtain p0 where "queues p0 \<noteq> []" by blast
+  from setcomp_Max_has_prop[where P="\<lambda>p. queues p \<noteq> []", OF this]
+  show ?thesis by (simp add: max_non_empty_queue_def)
+qed
+
+lemma max_non_empty_queue_ne':
+  "queues p \<noteq> [] \<Longrightarrow> max_non_empty_queue queues \<noteq> []"
+  by (rule max_non_empty_queue_ne) blast
+
 lemma choose_thread_empty_fail[intro!, wp, simp]:
   "empty_fail (choose_thread :: (unit,'state_ext) s_monad)"
-  by (wpsimp simp: choose_thread_def)
+  apply (wpsimp simp: choose_thread_def)
+   apply (blast dest: max_non_empty_queue_ne')
+  apply simp
+  done
 
 lemma schedule_choose_new_thread_empty_fail[intro!, wp, simp]:
   "empty_fail (schedule_choose_new_thread :: (unit,'state_ext) s_monad)"

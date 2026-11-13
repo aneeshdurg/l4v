@@ -1014,7 +1014,7 @@ lemma choose_thread_cur_vcpu_in_cur_domain[wp]:
    \<lbrace>\<lambda>_. cur_vcpu_in_cur_domain\<rbrace>"
   unfolding choose_thread_def
   apply wpsimp
-  apply (frule oqueue_select_queued)
+  apply (frule max_non_empty_queue_mem)
   apply (fastforce split: option.splits
                    simp: etcb_at_def valid_queues_def in_cur_domain_def)
   done

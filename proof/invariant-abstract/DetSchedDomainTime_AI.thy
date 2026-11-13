@@ -502,9 +502,7 @@ lemma schedule_domain_time_left:
   supply word_neq_0_conv[simp]
   apply (simp add: schedule_def)
   apply (wp valid_domain_list_lift|wpc)+
-           apply (wp hoare_drop_imp)[1]
-          apply (wpsimp wp: gts_wp valid_domain_list_lift)+
-  apply auto
+  apply (wpsimp wp: gts_wp valid_domain_list_lift)+
   done
 
 end (* context DetSchedDomainTime_AI *)

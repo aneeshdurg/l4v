@@ -396,7 +396,6 @@ record tcb =
  tcb_ipc_buffer    :: vspace_ref
  tcb_fault         :: "fault option"
  tcb_bound_notification :: "obj_ref option"
- tcb_sched_context :: "obj_ref option"
  tcb_oqueue_budget :: ticks
  tcb_mcpriority    :: priority
  tcb_priority      :: priority
@@ -438,7 +437,6 @@ definition default_tcb :: "domain \<Rightarrow> tcb" where
       tcb_ipc_buffer = 0,
       tcb_fault      = None,
       tcb_bound_notification = None,
-      tcb_sched_context = None,
       tcb_oqueue_budget = 0,
       tcb_mcpriority = minBound,
       tcb_priority   = default_priority,
@@ -578,9 +576,6 @@ record abstract_state =
   cur_thread         :: obj_ref
   idle_thread        :: obj_ref
   scheduler_action   :: scheduler_action
-  oqueue_active      :: bool
-  cur_sc             :: obj_ref
-  consumed_time      :: ticks
   domain_list        :: "(domain \<times> domain_duration) list"
   domain_index       :: nat
   domain_start_index :: nat

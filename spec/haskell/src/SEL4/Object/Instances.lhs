@@ -133,7 +133,6 @@ By default, new threads are unable to change the security domains of other threa
 >         tcbMCP = minBound,
 >         tcbPriority = minBound,
 >         tcbQueued = False,
->         tcbSchedContext = Nothing,
 >         tcbOQueueBudget = 0,
 >         tcbFault = Nothing,
 >         tcbTimeSlice = timeSlice,

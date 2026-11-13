@@ -1162,13 +1162,9 @@ lemma setCurThread_const:
   "\<lbrace>\<lambda>_. P t \<rbrace> setCurThread t \<lbrace>\<lambda>_ s. P (ksCurThread s) \<rbrace>"
   by (simp add: setCurThread_def | wp)+
 
-lemma getOQueueActive_wp[wp]:
-  "\<lbrace>\<lambda>s. P (ksOQueueActive s) s\<rbrace> getOQueueActive \<lbrace>P\<rbrace>"
-  by (simp add: getOQueueActive_def | wp)+
-
 lemma oqueueEntry_inv[wp]:
   "\<lbrace>P\<rbrace> oqueueEntry t \<lbrace>\<lambda>_. P\<rbrace>"
-  by (wpsimp simp: oqueueEntry_def getCurSc_def getConsumedTime_def)
+  by (wpsimp simp: oqueueEntry_def)
 
 lemma mapM_inv_post:
   "\<lbrakk>\<And>x. \<lbrace>P\<rbrace> f x \<lbrace>\<lambda>_. P\<rbrace>; \<And>rv s. P s \<Longrightarrow> Q rv s\<rbrakk>
@@ -1303,16 +1299,11 @@ where
      case tcbs_of' s t of
        None \<Rightarrow> None
      | Some tcb \<Rightarrow>
-         if runnable' (tcbState tcb)
-         then Some (t, (let pending = (if tcbSchedContext tcb = Some (ksCurSc s)
-                                       then ksConsumedTime s else 0);
-                            budget = tcbOQueueBudget tcb
-                        in if pending < budget then budget - pending else 0))
-         else None"
+         if runnable' (tcbState tcb) then Some (t, tcbOQueueBudget tcb) else None"
 
 lemma oqueueEntry_wp:
   "\<lbrace>\<lambda>s. tcb_at' t s \<and> P (oqueue_entry_conc s t) s\<rbrace> oqueueEntry t \<lbrace>P\<rbrace>"
-  unfolding oqueueEntry_def getCurSc_def getConsumedTime_def
+  unfolding oqueueEntry_def
   apply (wpsimp wp: isRunnable_wp threadGet_wp)
   apply (clarsimp simp: oqueue_entry_conc_def obj_at'_def opt_map_def pred_tcb_at'_def
                         projectKO_opt_tcb split: option.splits)
@@ -1339,7 +1330,7 @@ lemma no_fail_isRunnable:
 
 lemma oqueueEntry_no_fail:
   "no_fail (tcb_at' t) (oqueueEntry t)"
-  unfolding oqueueEntry_def getCurSc_def getConsumedTime_def
+  unfolding oqueueEntry_def
   by (wpsimp wp: no_fail_isRunnable)
 
 lemma oqueueEntry_hoare:
@@ -1355,7 +1346,6 @@ lemma oqueue_entry_rel:
   fixes s :: det_state
   assumes sr: "(s, s') \<in> state_relation" and ta: "tcb_at t s"
   assumes al: "pspace_aligned s" and di: "pspace_distinct s"
-  assumes cs: "cur_sc s = ksCurSc s'" and ct: "consumed_time s = ksConsumedTime s'"
   shows "oqueue_entry_abs s t = oqueue_entry_conc s' t"
 proof -
   from ta obtain tcb where g: "get_tcb t s = Some tcb"
@@ -1372,18 +1362,15 @@ proof -
   hence tr: "runnable (tcb_state tcb) = runnable' (tcbState tcb')"
     by (rule thread_state_relation_runnable)
   show ?thesis
-    using g g' rel cs ct tr
-    apply (clarsimp simp: oqueue_entry_abs_def oqueue_remaining_budget_def oqueue_entry_conc_def
-                          tcb_relation_def Let_def
-                    split: if_splits)
-    apply (auto simp: word_gt_0 not_less dest: order_less_asym)
-    done
+    using g g' rel tr
+    by (clarsimp simp: oqueue_entry_abs_def oqueue_remaining_budget_def oqueue_entry_conc_def
+                       tcb_relation_def split: if_splits)
 qed
 
 lemma oqueueEntry_corres:
   "corres (=)
-     (tcb_at t and pspace_aligned and pspace_distinct and (\<lambda>s. cur_sc s = cs \<and> consumed_time s = ct))
-     (tcb_at' t and (\<lambda>s'. ksCurSc s' = cs \<and> ksConsumedTime s' = ct))
+     (tcb_at t and pspace_aligned and pspace_distinct)
+     (tcb_at' t)
      (gets (\<lambda>s::det_state. oqueue_entry_abs s t)) (oqueueEntry t)"
   apply (rule corres_gets_pure[where e="\<lambda>s'. oqueue_entry_conc s' t"])
     apply (fastforce simp: oqueue_entry_rel)
@@ -1551,7 +1538,6 @@ lemma oqueue_select_rel:
   fixes s :: det_state
   assumes sr: "(s, s') \<in> state_relation"
   assumes al: "pspace_aligned s" and di: "pspace_distinct s"
-  assumes cs: "cur_sc s = ksCurSc s'" and ct: "consumed_time s = ksConsumedTime s'"
   assumes lq: "list_queue_relation Q queue (tcbSchedNexts_of s') (tcbSchedPrevs_of s')"
   assumes tc: "\<forall>t \<in> set Q. tcb_at t s"
   shows "oqueue_select s Q = oqueue_sel_conc s' queue"
@@ -1562,7 +1548,7 @@ proof -
     fix x assume "x \<in> set Q"
     hence "tcb_at x s" using tc by blast
     thus "oqueue_entry_abs s x = oqueue_entry_conc s' x"
-      by (rule oqueue_entry_rel[OF sr _ al di cs ct])
+      by (rule oqueue_entry_rel[OF sr _ al di])
   qed
   show ?thesis
     by (simp add: oqueue_select_def oqueue_sel_conc_def oqueue_best_foldl l eq)
@@ -1572,7 +1558,6 @@ lemma oqueue_select_rel_Some:
   fixes s :: det_state
   assumes sr: "(s, s') \<in> state_relation"
   assumes al: "pspace_aligned s" and di: "pspace_distinct s"
-  assumes cs: "cur_sc s = ksCurSc s'" and ct: "consumed_time s = ksConsumedTime s'"
   assumes lq: "list_queue_relation Q queue (tcbSchedNexts_of s') (tcbSchedPrevs_of s')"
   assumes nz: "Q \<noteq> []"
   assumes run': "\<forall>t \<in> set Q. st_tcb_at' runnable' t s'"
@@ -1581,7 +1566,7 @@ lemma oqueue_select_rel_Some:
 proof -
   have tc: "\<forall>t \<in> set Q. tcb_at t s" using run by (fastforce simp: st_tcb_at_tcb_at)
   have r: "oqueue_select s Q = oqueue_sel_conc s' queue"
-    by (rule oqueue_select_rel[OF sr al di cs ct lq tc])
+    by (rule oqueue_select_rel[OF sr al di lq tc])
   obtain t where "oqueue_sel_conc s' queue = Some t"
     using oqueue_conc_pre[OF lq nz run'] by blast
   thus ?thesis using r by simp
@@ -1590,14 +1575,13 @@ qed
 lemma oqueueSelect_corres:
   assumes nz: "Q \<noteq> []"
   shows "corres (\<lambda>c t. c = Some t)
-           (pspace_aligned and pspace_distinct and (\<lambda>s. cur_sc s = cs \<and> consumed_time s = ct)
+           (pspace_aligned and pspace_distinct
             and (\<lambda>s. \<forall>t \<in> set Q. st_tcb_at runnable t s))
-           ((\<lambda>s'. ksCurSc s' = cs \<and> ksConsumedTime s' = ct)
-            and (\<lambda>s'. list_queue_relation Q queue (tcbSchedNexts_of s') (tcbSchedPrevs_of s'))
+           ((\<lambda>s'. list_queue_relation Q queue (tcbSchedNexts_of s') (tcbSchedPrevs_of s'))
             and (\<lambda>s'. \<forall>t \<in> set Q. st_tcb_at' runnable' t s'))
            (gets (\<lambda>s::det_state. oqueue_select s Q)) (oqueueSelect queue)"
   apply (rule corres_gets_pure_r[where e="\<lambda>s'. the (oqueue_sel_conc s' queue)"])
-    apply (clarsimp, rule oqueue_select_rel_Some[OF _ _ _ _ _ _ nz]; assumption)
+    apply (clarsimp, rule oqueue_select_rel_Some[OF _ _ _ _ nz]; assumption)
    apply (rule hoare_weaken_pre[OF oqueueSelect_wp])
    apply (fastforce dest: oqueue_conc_pre[OF _ nz])
   apply (rule no_fail_pre[OF oqueueSelect_no_fail])
@@ -1903,18 +1887,16 @@ lemma (in Schedule_R_2) oqueueSelect_rel_branch:
   assumes vb: "valid_bitmaps s'" and l1: "ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0"
   assumes Qd: "Q = max_non_empty_queue (ready_queues s (cur_domain s))"
   assumes qd: "queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')"
-  assumes cs1: "cur_sc s = cs" and cs2: "ksCurSc s' = cs"
-  assumes ct1: "consumed_time s = ct" and ct2: "ksConsumedTime s' = ct"
   shows "oqueue_select s Q = Some (the (oqueue_sel_conc s' queue))"
 proof -
   from ne have ne': "\<not> (\<forall>p. ready_queues s (cur_domain s) p = [])" by auto
   note f = oqueueSelect_facts[OF sr iv vq ne' vb l1]
   show ?thesis
     unfolding Qd qd
-    by (rule oqueue_select_rel_Some[OF sr invs_psp_aligned[OF iv] invs_distinct[OF iv] _ _
+    by (rule oqueue_select_rel_Some[OF sr invs_psp_aligned[OF iv] invs_distinct[OF iv]
               f[THEN conjunct1] f[THEN conjunct2, THEN conjunct1]
               f[THEN conjunct2, THEN conjunct2, THEN conjunct2]
-              f[THEN conjunct2, THEN conjunct2, THEN conjunct1]]; simp add: cs1 cs2 ct1 ct2)
+              f[THEN conjunct2, THEN conjunct2, THEN conjunct1]])
 qed
 
 lemma (in Schedule_R_2) oqueueSelect_conc_pre_branch:
@@ -1940,10 +1922,9 @@ lemma (in Schedule_R_2) oqueueSelect_branches:
   assumes pa: "(invs and valid_queues
       and (\<lambda>s. Q = max_non_empty_queue (ready_queues s (cur_domain s)))
       and (\<lambda>s. \<exists>p. ready_queues s (cur_domain s) p \<noteq> [])
-      and (\<lambda>s. cur_sc s = cs \<and> consumed_time s = ct)) s"
+      ) s"
   assumes pc: "(\<lambda>s'. queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')
-            \<and> valid_bitmaps s' \<and> ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0
-            \<and> ksCurSc s' = cs \<and> ksConsumedTime s' = ct) s'"
+            \<and> valid_bitmaps s' \<and> ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0) s'"
   shows "oqueue_select s Q = Some (the (oqueue_sel_conc s' queue))
          \<and> (\<forall>t \<in> set (oqueueQueueList s' queue). tcb_at' t s')
          \<and> (\<exists>t. oqueue_sel_conc s' queue = Some t)"
@@ -1951,14 +1932,12 @@ proof -
   from pa have iv: "invs s" and vq: "valid_queues s"
     and Qd: "Q = max_non_empty_queue (ready_queues s (cur_domain s))"
     and ne: "\<exists>p. ready_queues s (cur_domain s) p \<noteq> []"
-    and cs1: "cur_sc s = cs" and ct1: "consumed_time s = ct"
     by (simp_all add: pred_conj_def)
   from pc have qd: "queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')"
     and vb: "valid_bitmaps s'" and l1: "ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0"
-    and cs2: "ksCurSc s' = cs" and ct2: "ksConsumedTime s' = ct"
     by simp_all
   show ?thesis
-    by (intro conjI oqueueSelect_rel_branch[OF sr iv vq ne vb l1 Qd qd cs1 cs2 ct1 ct2]
+    by (intro conjI oqueueSelect_rel_branch[OF sr iv vq ne vb l1 Qd qd]
               oqueueSelect_conc_pre_branch[OF sr iv vq ne vb l1 qd, THEN conjunct1]
               oqueueSelect_conc_pre_branch[OF sr iv vq ne vb l1 qd, THEN conjunct2])
 qed
@@ -1968,10 +1947,9 @@ lemma (in Schedule_R_2) oqueueSelect_corres':
      (invs and valid_queues
       and (\<lambda>s. Q = max_non_empty_queue (ready_queues s (cur_domain s)))
       and (\<lambda>s. \<exists>p. ready_queues s (cur_domain s) p \<noteq> [])
-      and (\<lambda>s. cur_sc s = cs \<and> consumed_time s = ct))
+      )
      ((\<lambda>s'. queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')
-            \<and> valid_bitmaps s' \<and> ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0
-            \<and> ksCurSc s' = cs \<and> ksConsumedTime s' = ct))
+            \<and> valid_bitmaps s' \<and> ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0))
      (gets (\<lambda>s::det_state. oqueue_select s Q)) (oqueueSelect queue)"
   apply (rule corres_gets_pure_rel[where e="\<lambda>s'. the (oqueue_sel_conc s' queue)"])
     apply (drule (2) oqueueSelect_branches)
@@ -1984,11 +1962,6 @@ lemma (in Schedule_R_2) oqueueSelect_corres':
   apply (fastforce simp: no_fail_def)
   done
 
-lemma getOQueueActive_corres:
-  "corres (\<lambda>a c. a = pa \<and> c = pa) (\<lambda>s. oqueue_active s = pa) (\<lambda>s'. ksOQueueActive s' = pa)
-     (gets oqueue_active) getOQueueActive"
-  by (clarsimp simp: getOQueueActive_def corres_underlying_def simpler_gets_def)
-
 lemma valid_queues_hd_runnable:
   assumes vq: "valid_queues s" and ne: "ready_queues s d p \<noteq> []"
   shows "st_tcb_at runnable (hd (max_non_empty_queue (ready_queues s d))) s"
@@ -1999,55 +1972,40 @@ proof -
 qed
 
 lemma (in Schedule_R_2) chooseThread_policy_corres:
-  assumes F: "the (he_ptrs_head queue) = hd (max_non_empty_queue queues)"
-  shows "corres dc
-    (invs and valid_sched and (\<lambda>s. cur_sc s = cs \<and> consumed_time s = ct)
+  "corres dc
+    (invs and valid_sched
      and (\<lambda>s. queues = ready_queues s (cur_domain s))
      and (\<lambda>s. \<exists>p. ready_queues s (cur_domain s) p \<noteq> []))
-    (invs_no_cicd' and (\<lambda>s'. ksCurSc s' = cs \<and> ksConsumedTime s' = ct)
+    (invs_no_cicd'
      and (\<lambda>s'. ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0
               \<and> queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')))
-    (if pa
-     then do s \<leftarrow> get;
-             assert (oqueue_select s (max_non_empty_queue queues) \<noteq> None);
-             guarded_switch_to (the (oqueue_select s (max_non_empty_queue queues)))
-          od
-     else guarded_switch_to (hd (max_non_empty_queue queues)))
-    (do thread \<leftarrow> if pa then oqueueSelect queue else return $ fromJust $ he_ptrs_head queue;
+    (do s \<leftarrow> get;
+        y \<leftarrow> assert (\<exists>y. oqueue_select s (max_non_empty_queue queues) = Some y);
+        guarded_switch_to (the (oqueue_select s (max_non_empty_queue queues)))
+     od)
+    (do thread \<leftarrow> oqueueSelect queue;
         runnable \<leftarrow> isRunnable thread;
         y \<leftarrow> assert runnable;
-        ThreadDecls_H.switchToThread thread
+        switchToThread thread
      od)"
-proof (cases pa)
-  case False
-  then show ?thesis
-    apply (simp add: F fromJust_def)
-    apply (rule corres_guard_imp)
-      apply (rule_tac P=\<top> and P'=\<top> in guarded_switch_to_chooseThread_fragment_corres)
-     apply (fastforce intro: valid_queues_hd_runnable simp: pred_conj_def valid_sched_def)
-    apply (clarsimp simp: pred_conj_def)
-    done
-next
-  case True
+proof -
   have eq: "(do s \<leftarrow> get;
-              assert (oqueue_select s (max_non_empty_queue queues) \<noteq> None);
+              y \<leftarrow> assert (\<exists>y. oqueue_select s (max_non_empty_queue queues) = Some y);
               guarded_switch_to (the (oqueue_select s (max_non_empty_queue queues)))
            od) =
            (do c \<leftarrow> gets (\<lambda>s. oqueue_select s (max_non_empty_queue queues));
-               assert (c \<noteq> None);
+               y \<leftarrow> assert (\<exists>y. c = Some y);
                guarded_switch_to (the c)
             od)"
     by (simp add: gets_def bind_assoc)
   show ?thesis
-    apply (simp only: True if_True)
     apply (subst eq)
     apply (rule corres_guard_imp)
       apply (rule corres_split
                [where R="\<lambda>c s. c = oqueue_select s (max_non_empty_queue queues)
                                 \<and> invs s \<and> valid_sched s \<and> queues = ready_queues s (cur_domain s)"
                   and R'="\<lambda>_ s. invs_no_cicd' s",
-                OF oqueueSelect_corres'[where Q="max_non_empty_queue queues" and cs=cs and ct=ct
-                                          and queue=queue]])
+                OF oqueueSelect_corres'[where Q="max_non_empty_queue queues" and queue=queue]])
          apply clarsimp
          apply (rename_tac t)
          apply (rule corres_guard_imp)
@@ -2064,8 +2022,8 @@ qed
 
 lemma (in Schedule_R_2) chooseThread_corres:
   "corres dc
-     (invs and valid_sched and (\<lambda>s. oqueue_active s = pa \<and> cur_sc s = cs \<and> consumed_time s = ct))
-     (invs_no_cicd' and (\<lambda>s'. ksOQueueActive s' = pa \<and> ksCurSc s' = cs \<and> ksConsumedTime s' = ct))
+     (invs and valid_sched)
+     invs_no_cicd'
      choose_thread chooseThread"
   (is "corres _ ?PREI ?PREH _ _")
 proof -
@@ -2106,9 +2064,7 @@ proof -
                                         all_invs_but_ct_idle_or_in_cur_domain'_def)
                 apply clarsimp
                 apply (rule corres_guard_imp)
-                  apply (rule corres_split[OF getOQueueActive_corres[where pa=pa]])
-                     apply clarsimp
-                     apply (rule chooseThread_policy_corres[where pa=pa and cs=cs and ct=ct]; assumption)
+                  apply (rule_tac queues=queues and queue=queue in chooseThread_policy_corres)
                  apply (wpsimp simp: getQueue_def getReadyQueuesL2Bitmap_def)+
         apply (wp hoare_vcg_conj_lift hoare_vcg_imp_lift ksReadyQueuesL1Bitmap_return_wp)
        apply (wpsimp wp: curDomain_or_return_0 simp: curDomain_def)+
@@ -2311,7 +2267,97 @@ begin
 lemma schedule_corres:
   "corres dc (invs and valid_domain_list and valid_sched and valid_list) invs'
           (Schedule_A.schedule) ThreadDecls_H.schedule"
-  sorry
+  supply ssa_wp[wp del]
+  supply tcbSchedEnqueue_invs'[wp del]
+  supply tcbSchedEnqueue_invs'_not_ResumeCurrentThread[wp del]
+  supply setSchedulerAction_direct[wp]
+  supply if_split[split del]
+
+  apply (clarsimp simp: Schedule_A.schedule_def Thread_H.schedule_def)
+  apply (subst thread_get_test)
+  apply (subst thread_get_comm)
+  apply (subst schact_bind_inside)
+  apply (rule corres_guard_imp)
+    apply (rule corres_split[OF getCurThread_corres[THEN corres_rel_imp[where r="\<lambda>x y. y = x"],simplified]])
+      apply (rule corres_split[OF getSchedulerAction_corres])
+        apply (rule corres_split_sched_act,assumption)
+          apply (rule_tac P="tcb_at ct" in corres_symb_exec_l')
+            apply (rule_tac corres_symb_exec_l)
+               apply simp
+               apply (rule corres_assert_ret)
+              apply ((wpsimp wp: thread_get_wp' gets_exs_valid)+)
+         prefer 2
+         (* choose thread *)
+         apply clarsimp
+         apply (rule corres_split[OF thread_get_isRunnable_corres])
+           apply (rule corres_split)
+              apply (rule corres_when, simp)
+              apply (rule tcbSchedEnqueue_corres, simp)
+             apply (rule scheduleChooseNewThread_corres, simp)
+            apply (wp thread_get_wp' tcbSchedEnqueue_invs' hoare_vcg_conj_lift hoare_drop_imps
+                      valid_domain_list_lift
+                   | clarsimp)+
+        (* switch to thread: the policy picks, so the candidate is only appended *)
+        apply (rule corres_split[OF thread_get_isRunnable_corres],
+                rename_tac was_running wasRunning)
+          apply (rule corres_split)
+             apply (rule corres_when, simp)
+             apply (rule tcbSchedEnqueue_corres, simp)
+            apply (rule corres_split[OF tcbSchedAppend_corres], simp)
+              apply (simp, fold dc_def)
+              apply (rule corres_split)
+                 apply (rule setSchedulerAction_corres; simp)
+                apply (rule scheduleChooseNewThread_corres)
+               apply (wp valid_domain_list_lift | simp)+
+               apply (simp add: valid_sched_def)
+               apply wp
+               apply (rule hoare_vcg_conj_lift)
+                apply (rule_tac t=t in set_scheduler_action_cnt_valid_blocked')
+               apply (wpsimp wp: setSchedulerAction_invs' valid_domain_list_lift)+
+             apply (wp tcb_sched_action_append_valid_blocked hoare_vcg_all_lift append_thread_queued)
+            apply (wp tcbSchedAppend_invs'_not_ResumeCurrentThread)
+           apply (clarsimp simp: conj_commute conj_left_commute cong: conj_cong)
+           apply (wp valid_domain_list_lift)
+           apply (rule_tac Q'="\<lambda>_ s. valid_blocked_except t s \<and> scheduler_action s = switch_thread t"
+                    in hoare_post_imp, fastforce)
+           apply (wp add: tcb_sched_action_enqueue_valid_blocked_except
+                          tcbSchedEnqueue_invs'_not_ResumeCurrentThread thread_get_wp
+                     del: gets_wp
+                  | strengthen valid_objs'_valid_tcbs')+
+       apply (clarsimp simp: if_apply_def2 cong: imp_cong conj_cong)
+       apply (wp gets_wp)+
+
+   (* abstract final subgoal *)
+   apply clarsimp
+
+   subgoal for s
+     apply (clarsimp split: Structures_A.scheduler_action.splits
+                     simp: invs_psp_aligned invs_distinct invs_valid_objs invs_arch_state
+                           invs_vspace_objs[simplified] tcb_at_invs)
+     apply (rule conjI, clarsimp)
+      apply (fastforce simp: invs_def
+                            valid_sched_def valid_sched_action_def is_activatable_def
+                            st_tcb_at_def obj_at_def valid_state_def only_idle_def
+                            )
+     apply (rule conjI, clarsimp)
+      subgoal for candidate
+        apply (clarsimp simp: valid_sched_def invs_def valid_state_def cur_tcb_def
+                               valid_sched_action_def weak_valid_sched_action_def
+                               valid_blocked_except_def valid_blocked_def invs_hyp_sym_refs)
+        apply (fastforce simp add: pred_tcb_at_def obj_at_def is_tcb valid_idle_def)
+        done
+     (* choose new thread case *)
+     apply (intro impI conjI allI tcb_at_invs
+            | fastforce simp: invs_def cur_tcb_def
+                              valid_sched_def  st_tcb_at_def obj_at_def valid_state_def
+                              weak_valid_sched_action_def not_cur_thread_def)+
+     done
+
+  (* haskell final subgoal *)
+  apply (clarsimp simp: if_apply_def2 invs'_def valid_state'_def
+                  cong: imp_cong  split: scheduler_action.splits)
+  apply (fastforce simp: cur_tcb'_def valid_pspace'_def)
+  done
 
 end (* Schedule_R_3 *)
 
@@ -2578,8 +2624,9 @@ lemma (in Schedule_R_3) schedule_invs':
      \<comment> \<open>action = ChooseNewThread\<close>
      apply (wp scheduleChooseNewThread_invs')
     \<comment> \<open>action = SwitchToThread candidate\<close>
-    apply (wpsimp wp: scheduleChooseNewThread_invs' ssa_invs'
-                      chooseThread_invs_no_cicd' setSchedulerAction_invs' setSchedulerAction_direct
+    apply (wpsimp wp: scheduleChooseNewThread_invs' ssa_invs' setSchedulerAction_invs'
+                      tcbSchedAppend_invs'_not_ResumeCurrentThread
+                      tcbSchedEnqueue_invs'_not_ResumeCurrentThread setSchedulerAction_direct
                       switchToThread_tcb_in_cur_domain' switchToThread_ct_not_queued_2
            | wp hoare_disjI2[where Q'="\<lambda>_ s. tcb_in_cur_domain' (ksCurThread s) s"]
            | wp hoare_drop_imp[where f="isHighestPrio d p" for d p]
@@ -2622,7 +2669,9 @@ lemma (in Schedule_R_3) schedule_ct_activatable'[wp]:
      \<comment> \<open>action = ChooseNewThread\<close>
      apply wpsimp
     \<comment> \<open>action = SwitchToThread\<close>
-    apply (wpsimp wp: ssa_invs' setSchedulerAction_direct ssa_ct
+    apply (wpsimp wp: ssa_invs' setSchedulerAction_direct ssa_ct scheduleChooseNewThread_ct_activatable'
+                      tcbSchedAppend_invs'_not_ResumeCurrentThread
+                      tcbSchedEnqueue_invs'_not_ResumeCurrentThread
            | wp hoare_drop_imp[where f="isHighestPrio d p" for d p]
            | simp only: obj_at'_activatable_st_tcb_at'[simplified comp_def]
            | strengthen invs'_invs_no_cicd

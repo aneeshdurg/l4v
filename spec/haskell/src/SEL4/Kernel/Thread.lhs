@@ -330,34 +330,14 @@ The default action is to do nothing; the current thread will resume execution.
 
 >             ResumeCurrentThread -> return ()
 
-An IPC operation may request that the scheduler switch to a specific thread.
-We check here that the candidate has the highest priority in the system.
+An IPC operation may request that the scheduler switch to a specific thread. The scheduling policy chooses among the ready threads, so the candidate is never switched to directly: it is placed at the back of its queue and a new thread is chosen.
 
 >             SwitchToThread candidate -> do
 >                 wasRunnable <- isRunnable curThread
 >                 when wasRunnable (tcbSchedEnqueue curThread)
->                 idleThread <- getIdleThread
->                 targetPrio <- threadGet tcbPriority candidate
->                 curPrio <- threadGet tcbPriority curThread
->                 fastfail <- scheduleSwitchThreadFastfail curThread idleThread curPrio targetPrio
->
->                 curDom <- curDomain
->                 highest <- isHighestPrio curDom targetPrio
->                 policyActive <- getOQueueActive
->
->                 if (fastfail && not highest && not policyActive)
->                     then do
->                         tcbSchedEnqueue candidate
->                         setSchedulerAction ChooseNewThread
->                         scheduleChooseNewThread
->                     else if ((wasRunnable && curPrio == targetPrio) || policyActive)
->                             then do
->                                 tcbSchedAppend candidate
->                                 setSchedulerAction ChooseNewThread
->                                 scheduleChooseNewThread
->                             else do
->                                 switchToThread candidate
->                                 setSchedulerAction ResumeCurrentThread
+>                 tcbSchedAppend candidate
+>                 setSchedulerAction ChooseNewThread
+>                 scheduleChooseNewThread
 
 If the current thread is no longer runnable, has used its entire timeslice, an IPC cancellation has potentially woken multiple higher priority threads, or the domain timeslice is exhausted, then we scan the scheduler queues to choose a new thread. In the last case, we switch to the next domain beforehand.
 
@@ -412,12 +392,7 @@ Note also that the level 2 bitmap array is stored in reverse in order to get bet
 >     if eligible
 >         then do
 >             budget <- threadGet tcbOQueueBudget thread
->             sc <- threadGet tcbSchedContext thread
->             curSc <- getCurSc
->             consumed <- getConsumedTime
->             pending <- return $ if sc == Just curSc then consumed else 0
->             remaining <- return $ if budget > pending then budget - pending else 0
->             return (Just (thread, remaining))
+>             return (Just (thread, budget))
 >         else return Nothing
 
 > oqueuePick :: Maybe (PPtr TCB, Ticks) -> Maybe (PPtr TCB, Ticks) -> Maybe (PPtr TCB, Ticks)
@@ -447,10 +422,7 @@ The policy chooses the first minimum-budget eligible member of the queue. The qu
 >         then do
 >             prio <- getHighestPrio curdom
 >             queue <- getQueue curdom prio
->             policyActive <- getOQueueActive
->             thread <- if policyActive
->                 then oqueueSelect queue
->                 else return $ fromJust $ tcbQueueHead queue
+>             thread <- oqueueSelect queue
 >             runnable <- isRunnable thread
 >             assert runnable "Scheduled a non-runnable thread"
 >             switchToThread thread

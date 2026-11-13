@@ -79,10 +79,7 @@ where
       None \<Rightarrow> None
     | Some tcb \<Rightarrow>
         if runnable (tcb_state tcb) then
-          let pending = (if tcb_sched_context tcb = Some (cur_sc s)
-                         then consumed_time s else 0);
-              budget = tcb_oqueue_budget tcb
-          in Some (if budget < pending then 0 else budget - pending)
+          Some (tcb_oqueue_budget tcb)
         else None"
 
 function oqueue_best ::
@@ -136,26 +133,6 @@ lemma oqueue_select_not_None:
    \<Longrightarrow> oqueue_select s q \<noteq> None"
   by (fastforce simp: oqueue_select_def dest: oqueue_best_not_None split: option.splits)
 
-definition attach_oqueue_policy :: "(bool, 'z::state_ext) s_monad" where
-  "attach_oqueue_policy \<equiv> do
-     active \<leftarrow> gets oqueue_active;
-     if active then return False
-     else do
-       modify (\<lambda>s. s\<lparr>oqueue_active := True\<rparr>);
-       return True
-     od
-   od"
-
-definition detach_oqueue_policy :: "(bool, 'z::state_ext) s_monad" where
-  "detach_oqueue_policy \<equiv> do
-     active \<leftarrow> gets oqueue_active;
-     if active then do
-       modify (\<lambda>s. s\<lparr>oqueue_active := False\<rparr>);
-       return True
-     od else return False
-   od"
-
-
 definition choose_thread :: "(unit, 'z::state_ext) s_monad" where
   "choose_thread \<equiv> do
      d \<leftarrow> gets cur_domain;
@@ -163,13 +140,10 @@ definition choose_thread :: "(unit, 'z::state_ext) s_monad" where
      if \<forall>prio. queues prio = []
      then switch_to_idle_thread
      else do
-       active \<leftarrow> gets oqueue_active;
-       if active then do
-         s \<leftarrow> get;
-         candidate \<leftarrow> return (oqueue_select s (max_non_empty_queue queues));
-         assert (candidate \<noteq> None);
-         guarded_switch_to (the candidate)
-       od else guarded_switch_to (hd (max_non_empty_queue queues))
+       s \<leftarrow> get;
+       candidate \<leftarrow> return (oqueue_select s (max_non_empty_queue queues));
+       assert (candidate \<noteq> None);
+       guarded_switch_to (the candidate)
      od
    od"
 
@@ -216,42 +190,12 @@ definition
          od
        | switch_thread candidate \<Rightarrow> do
            when ct_runnable (tcb_sched_action tcb_sched_enqueue ct);
-
-           it \<leftarrow> gets idle_thread;
-           target_prio \<leftarrow> thread_get tcb_priority candidate;
-
-           \<comment> \<open>Infoflow does not like asking about the idle thread's priority or domain.\<close>
-           ct_prio \<leftarrow> if ct \<noteq> it then thread_get tcb_priority ct else return 0;
-           \<comment> \<open>When to look at the bitmaps. This optimisation is used in the C fast path,
-              but there we know @{text cur_thread} is not idle.\<close>
-           fastfail \<leftarrow> schedule_switch_thread_fastfail ct it ct_prio target_prio;
-
-           cur_dom \<leftarrow> gets cur_domain;
-           highest \<leftarrow> gets (is_highest_prio cur_dom target_prio);
-           \<comment> \<open>While the OQueue policy is attached, a direct candidate never bypasses the policy:
-              it is appended to its queue and the new thread is chosen by @{const choose_thread}.\<close>
-           policy_active \<leftarrow> gets oqueue_active;
-           if (fastfail \<and> \<not>highest \<and> \<not>policy_active)
-           then do
-               \<comment> \<open>Candidate is not best candidate, choose a new thread\<close>
-               tcb_sched_action tcb_sched_enqueue candidate;
-               set_scheduler_action choose_new_thread;
-               schedule_choose_new_thread
-             od
-           else if ((ct_runnable \<and> ct_prio = target_prio) \<or> policy_active)
-           then do
-               \<comment> \<open>Current thread was runnable and candidate is not strictly better
-                  want current thread to run next, so append the candidate to end of queue
-                  and choose again\<close>
-               tcb_sched_action tcb_sched_append candidate;
-               set_scheduler_action choose_new_thread;
-               schedule_choose_new_thread
-             od
-           else do
-             guarded_switch_to candidate;
-             \<comment> \<open>Duplication assists in wp proof under different scheduler actions\<close>
-             set_scheduler_action resume_cur_thread
-           od
+           \<comment> \<open>The scheduling policy chooses among ready threads, so a direct candidate never
+              bypasses it: it is appended to its queue and the next thread is chosen by
+              @{const choose_thread}.\<close>
+           tcb_sched_action tcb_sched_append candidate;
+           set_scheduler_action choose_new_thread;
+           schedule_choose_new_thread
         od)
     od"
 

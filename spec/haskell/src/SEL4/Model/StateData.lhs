@@ -95,9 +95,6 @@ The top-level kernel state structure is called "KernelState". It contains:
 \item the required action of the scheduler next time it runs;
 
 >         ksSchedulerAction :: SchedulerAction,
->         ksOQueueActive :: Bool,
->         ksCurSc :: PPtr SchedContext,
->         ksConsumedTime :: Ticks,
 >         ksInterruptState :: InterruptState,
 >         ksWorkUnitsCompleted :: Word,
 >         ksArchState :: Arch.KernelState }
@@ -178,40 +175,6 @@ Similarly, these functions access the idle thread pointer, the ready queue for a
 
 > setSchedulerAction :: SchedulerAction -> Kernel ()
 > setSchedulerAction a = modify (\ks -> ks { ksSchedulerAction = a })
->
-> getOQueueActive :: Kernel Bool
-> getOQueueActive = gets ksOQueueActive
->
-> attachOQueuePolicy :: Kernel Bool
-> attachOQueuePolicy = do
->     active <- getOQueueActive
->     if active
->         then return False
->         else do
->             modify (\ks -> ks { ksOQueueActive = True })
->             return True
->
-> detachOQueuePolicy :: Kernel Bool
-> detachOQueuePolicy = do
->     active <- getOQueueActive
->     if active
->         then do
->             modify (\ks -> ks { ksOQueueActive = False })
->             return True
->         else return False
-
-
-> getCurSc :: Kernel (PPtr SchedContext)
-> getCurSc = gets ksCurSc
->
-> setCurSc :: PPtr SchedContext -> Kernel ()
-> setCurSc sc = modify (\ks -> ks { ksCurSc = sc })
->
-> getConsumedTime :: Kernel Ticks
-> getConsumedTime = gets ksConsumedTime
->
-> setConsumedTime :: Ticks -> Kernel ()
-> setConsumedTime consumed = modify (\ks -> ks { ksConsumedTime = consumed })
 
 > getInterruptState :: Kernel InterruptState
 > getInterruptState = gets ksInterruptState
@@ -283,9 +246,6 @@ A new kernel state structure contains an empty physical address space, a set of 
 >         ksCurThread = error "No initial thread",
 >         ksIdleThread = error "Idle thread has not been created",
 >         ksSchedulerAction = error "scheduler action has not been set",
->         ksOQueueActive = False,
->         ksCurSc = error "No initial scheduling context",
->         ksConsumedTime = 0,
 >         ksInterruptState = error "Interrupt controller is uninitialised",
 >         ksWorkUnitsCompleted = 0,
 >         ksArchState = archState }

@@ -211,12 +211,6 @@ Entries in a capability table node (CNode) are represented by the type
 >     deriving Show
 
 
-\subsubsection{Schedulable Context Identity}
-
-The 16.0.0 Haskell model does not represent MCS scheduling-context objects or their refill queues. This type carries their pointer identity for the OQueue policy projection.
-
-> data SchedContext = SchedContext
-
 \subsubsection{Thread Control Block}
 
 Every thread has a thread control block, allocated by a user-level
@@ -265,9 +259,8 @@ The TCB is used to store various data about the thread's current state:
 
 >         tcbQueued :: Bool,
 
-\item the thread's MCS scheduling-context identity and its OQueue eligibility/head-refill budget projection;
+\item the thread's head-refill budget, which the scheduler policy minimises over;
 
->         tcbSchedContext :: Maybe (PPtr SchedContext),
 >         tcbOQueueBudget :: Ticks,
 
 \item the thread's current fault state;

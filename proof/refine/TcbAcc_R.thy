@@ -448,7 +448,7 @@ lemma ball_tcb_cte_casesI:
   by (simp add: tcb_cte_cases_def tcb_cte_cases_neqs)
 
 lemma all_tcbI:
-  "\<lbrakk> \<And>a b c d e f g h i j k l m n p q r s t u v. P (Thread a b c d e f g h i j k l m n p q r s t u v) \<rbrakk>
+  "\<lbrakk> \<And>a b c d e f g h i j k l m n p q r s t u. P (Thread a b c d e f g h i j k l m n p q r s t u) \<rbrakk>
    \<Longrightarrow> \<forall>tcb. P tcb"
   by (rule allI, case_tac tcb, simp)
 

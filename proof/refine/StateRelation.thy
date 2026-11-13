@@ -136,7 +136,6 @@ definition tcb_relation :: "Structures_A.tcb \<Rightarrow> Structures_H.tcb \<Ri
    \<and> tcb_time_slice tcb = tcbTimeSlice tcb'
    \<and> tcb_domain tcb = tcbDomain tcb'
    \<and> tcb_flags tcb = word_to_tcb_flags (tcbFlags tcb')
-   \<and> tcb_sched_context tcb = tcbSchedContext tcb'
    \<and> tcb_oqueue_budget tcb = tcbOQueueBudget tcb'"
 
 \<comment> \<open>
@@ -310,19 +309,6 @@ definition state_relation :: "(det_state \<times> kernel_state) set" where
        \<and> (domain_start_index s = ksDomScheduleStart s')
        \<and> (cur_domain s = ksCurDomain s')
        \<and> (domain_time s = ksDomainTime s')}"
-
-text \<open>
-  The OQueue policy state is deliberately not part of @{const state_relation}. It is related by
-  this separate predicate, which only the scheduler and policy attach/detach correspondence
-  lemmas mention. Ordinary kernel operations never write these fields on either side, so the
-  predicate is carried across them by one-sided frame lemmas instead of by editing every
-  correspondence lemma.
-\<close>
-definition policy_relation :: "det_state \<Rightarrow> kernel_state \<Rightarrow> bool" where
-  "policy_relation s s' \<equiv>
-     oqueue_active s = ksOQueueActive s'
-     \<and> cur_sc s = ksCurSc s'
-     \<and> consumed_time s = ksConsumedTime s'"
 
 text \<open>Rules for using states in the relation.\<close>
 

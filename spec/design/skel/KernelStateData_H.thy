@@ -47,9 +47,6 @@ record kernel_state =
   ksCurThread          :: machine_word
   ksIdleThread         :: machine_word
   ksSchedulerAction    :: scheduler_action
-  ksOQueueActive       :: bool
-  ksCurSc              :: machine_word
-  ksConsumedTime       :: "64 word"
   ksInterruptState     :: interrupt_state
   ksWorkUnitsCompleted :: machine_word
   ksArchState          :: Arch.kernel_state

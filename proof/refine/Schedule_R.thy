@@ -1263,13 +1263,13 @@ qed
 
 text \<open>The entry of a thread in a ready queue, read from the Haskell state.\<close>
 definition oqueue_entry_conc ::
-  "kernel_state \<Rightarrow> machine_word \<Rightarrow> (machine_word \<times> ticks) option"
+  "kernel_state \<Rightarrow> machine_word \<Rightarrow> (machine_word \<times> nat) option"
 where
   "oqueue_entry_conc s t \<equiv>
      case tcbs_of' s t of
        None \<Rightarrow> None
      | Some tcb \<Rightarrow>
-         if runnable' (tcbState tcb) then Some (t, tcbOQueueBudget tcb) else None"
+         if runnable' (tcbState tcb) then Some (t, tcbTimeSlice tcb) else None"
 
 lemma oqueueEntry_wp:
   "\<lbrace>\<lambda>s. tcb_at' t s \<and> P (oqueue_entry_conc s t) s\<rbrace> oqueueEntry t \<lbrace>P\<rbrace>"
@@ -1445,7 +1445,7 @@ text \<open>
   it (see @{const Schedule_A.choose_thread}), so this is where it is stated and proved.
 \<close>
 definition oqueue_entries ::
-  "(machine_word \<times> ticks) option list \<Rightarrow> (machine_word \<times> ticks) list"
+  "(machine_word \<times> nat) option list \<Rightarrow> (machine_word \<times> nat) list"
 where
   "oqueue_entries es \<equiv> List.map_filter id es"
 

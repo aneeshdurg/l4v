@@ -1311,7 +1311,7 @@ proof -
        apply (rule_tac ptr="x + xa" in cte_wp_at_tcbI', assumption+)
         apply fastforce
        apply simp
-      apply (rename_tac thread_state mcp priority bool oqbudget option nat cptr vptr bound tcbprev tcbnext tcbflags tcbarch)
+      apply (rename_tac thread_state mcp priority bool option nat cptr vptr bound tcbprev tcbnext tcbflags tcbarch)
       apply (case_tac thread_state, simp_all add: valid_tcb_state'_def valid_bound_tcb'_def
                                                   valid_bound_ntfn'_def obj_at_disj' opt_tcb_at'_def
                                            split: option.splits)[4]

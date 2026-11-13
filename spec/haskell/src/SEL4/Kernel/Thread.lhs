@@ -386,16 +386,16 @@ Note also that the level 2 bitmap array is stored in reverse in order to get bet
 >             hprio <- getHighestPrio d
 >             return (p >= hprio)
 
-> oqueueEntry :: PPtr TCB -> Kernel (Maybe (PPtr TCB, Ticks))
+> oqueueEntry :: PPtr TCB -> Kernel (Maybe (PPtr TCB, Int))
 > oqueueEntry thread = do
 >     eligible <- isRunnable thread
 >     if eligible
 >         then do
->             budget <- threadGet tcbOQueueBudget thread
+>             budget <- threadGet tcbTimeSlice thread
 >             return (Just (thread, budget))
 >         else return Nothing
 
-> oqueuePick :: Maybe (PPtr TCB, Ticks) -> Maybe (PPtr TCB, Ticks) -> Maybe (PPtr TCB, Ticks)
+> oqueuePick :: Maybe (PPtr TCB, Int) -> Maybe (PPtr TCB, Int) -> Maybe (PPtr TCB, Int)
 > oqueuePick best entry = case entry of
 >     Nothing -> best
 >     Just (_, budget) -> case best of

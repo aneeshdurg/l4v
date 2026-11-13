@@ -259,10 +259,6 @@ The TCB is used to store various data about the thread's current state:
 
 >         tcbQueued :: Bool,
 
-\item the thread's head-refill budget, which the scheduler policy minimises over;
-
->         tcbOQueueBudget :: Ticks,
-
 \item the thread's current fault state;
 
 >         tcbFault :: Maybe Fault,

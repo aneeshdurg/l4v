@@ -422,7 +422,8 @@ The policy chooses the first minimum-budget eligible member of the queue. The qu
 >         then do
 >             prio <- getHighestPrio curdom
 >             queue <- getQueue curdom prio
->             thread <- oqueueSelect queue
+>             active <- getOQueueActive
+>             thread <- if active then oqueueSelect queue else return $ fromJust $ tcbQueueHead queue
 >             runnable <- isRunnable thread
 >             assert runnable "Scheduled a non-runnable thread"
 >             switchToThread thread

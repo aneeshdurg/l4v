@@ -15,6 +15,7 @@ imports
   ADT_H
   InitLemmas
   PageTableDuplicates
+  OQueueHandoff_R
 begin
 
 context begin interpretation Arch . (*FIXME: arch-split*)

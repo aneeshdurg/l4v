@@ -1162,6 +1162,14 @@ lemma setCurThread_const:
   "\<lbrace>\<lambda>_. P t \<rbrace> setCurThread t \<lbrace>\<lambda>_ s. P (ksCurThread s) \<rbrace>"
   by (simp add: setCurThread_def | wp)+
 
+lemma getOQueueActive_wp[wp]:
+  "\<lbrace>\<lambda>s. P (ksOQueueActive s) s\<rbrace> getOQueueActive \<lbrace>P\<rbrace>"
+  by (simp add: getOQueueActive_def | wp)+
+
+lemma getOQueueActive_nf[wp]:
+  "no_fail P getOQueueActive"
+  by (simp add: getOQueueActive_def)
+
 lemma oqueueEntry_inv[wp]:
   "\<lbrace>P\<rbrace> oqueueEntry t \<lbrace>\<lambda>_. P\<rbrace>"
   by (wpsimp simp: oqueueEntry_def)
@@ -1879,6 +1887,50 @@ proof -
     done
 qed
 
+lemma (in Schedule_R_2) oqueueSelect_or_head_corres:
+  "corres (=)
+     (invs and valid_queues
+      and (\<lambda>s. Q = max_non_empty_queue (ready_queues s (cur_domain s)))
+      and (\<lambda>s. \<exists>p. ready_queues s (cur_domain s) p \<noteq> []))
+     ((\<lambda>s'. queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')
+            \<and> valid_bitmaps s' \<and> ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0))
+     (select (set Q))
+     (if pa then oqueueSelect queue else return $ fromJust $ tcbQueueHead queue)"
+proof (cases pa)
+  case True
+  then show ?thesis by (simp add: oqueueSelect_corres')
+next
+  case False
+  have main:
+    "\<And>s s'. \<lbrakk>(s, s') \<in> state_relation; invs s; valid_queues s;
+              Q = max_non_empty_queue (ready_queues s (cur_domain s));
+              \<exists>p. ready_queues s (cur_domain s) p \<noteq> [];
+              queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s');
+              valid_bitmaps s'; ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0\<rbrakk>
+     \<Longrightarrow> the (tcbQueueHead queue) \<in> set Q"
+  proof -
+    fix s s' assume sr: "(s, s') \<in> state_relation" and iv: "invs s" and vq: "valid_queues s"
+      and Qd: "Q = max_non_empty_queue (ready_queues s (cur_domain s))"
+      and ne: "\<exists>p. ready_queues s (cur_domain s) p \<noteq> []"
+      and qd: "queue = ksReadyQueues s' (ksCurDomain s', lookupBitmapPriority (ksCurDomain s') s')"
+      and vb: "valid_bitmaps s'" and l1: "ksReadyQueuesL1Bitmap s' (ksCurDomain s') \<noteq> 0"
+    from bitmap_lookup_queue_is_max_non_empty[OF vb sr iv l1]
+    have hd: "the (tcbQueueHead queue) = hd Q" by (simp add: qd Qd)
+    from ne obtain p where "ready_queues s (cur_domain s) p \<noteq> []" by blast
+    hence "Q \<noteq> []" unfolding Qd by (rule max_non_empty_queue_ne')
+    thus "the (tcbQueueHead queue) \<in> set Q" using hd by (simp add: hd_in_set)
+  qed
+  show ?thesis
+    apply (simp add: False)
+    apply (unfold corres_underlying_def)
+    apply clarify
+    apply (simp add: select_def return_def fromJust_def)
+    apply (rename_tac s s' p)
+    apply (frule_tac s=s and s'=s' in main)
+    apply (fastforce)+
+    done
+qed
+
 lemma valid_queues_hd_runnable:
   assumes vq: "valid_queues s" and ne: "ready_queues s d p \<noteq> []"
   shows "st_tcb_at runnable (hd (max_non_empty_queue (ready_queues s d))) s"
@@ -1899,7 +1951,7 @@ lemma (in Schedule_R_2) chooseThread_policy_corres:
     (do candidate \<leftarrow> select (set (max_non_empty_queue queues));
         guarded_switch_to candidate
      od)
-    (do thread \<leftarrow> oqueueSelect queue;
+    (do thread \<leftarrow> (if pa then oqueueSelect queue else return $ fromJust $ tcbQueueHead queue);
         runnable \<leftarrow> isRunnable thread;
         y \<leftarrow> assert runnable;
         switchToThread thread
@@ -1910,7 +1962,8 @@ lemma (in Schedule_R_2) chooseThread_policy_corres:
                 and R="\<lambda>c s. c \<in> set (max_non_empty_queue queues)
                               \<and> invs s \<and> valid_sched s \<and> queues = ready_queues s (cur_domain s)"
                 and R'="\<lambda>_ s. invs_no_cicd' s",
-              OF oqueueSelect_corres'[where Q="max_non_empty_queue queues" and queue=queue]])
+              OF oqueueSelect_or_head_corres[where Q="max_non_empty_queue queues" and queue=queue
+                                              and pa=pa]])
        apply clarsimp
        apply (rename_tac t)
        apply (rule corres_guard_imp)
@@ -1966,8 +2019,13 @@ proof -
                  apply (fastforce simp: bitmap_lookup_queue_is_max_non_empty
                                         all_invs_but_ct_idle_or_in_cur_domain'_def)
                 apply clarsimp
-                apply (rule corres_guard_imp)
-                  apply (rule_tac queues=queues and queue=queue in chooseThread_policy_corres)
+                apply (rule_tac Q'="\<lambda>_ s. all_invs_but_ct_idle_or_in_cur_domain' s
+                                         \<and> ksReadyQueuesL1Bitmap s (ksCurDomain s) \<noteq> 0
+                                         \<and> queue = ksReadyQueues s (ksCurDomain s,
+                                                       lookupBitmapPriority (ksCurDomain s) s)"
+                         in corres_symb_exec_r)
+                   apply (rule corres_guard_imp)
+                     apply (rule_tac queues=queues and queue=queue in chooseThread_policy_corres)
                  apply (wpsimp simp: getQueue_def getReadyQueuesL2Bitmap_def)+
         apply (wp hoare_vcg_conj_lift hoare_vcg_imp_lift ksReadyQueuesL1Bitmap_return_wp)
        apply (wpsimp wp: curDomain_or_return_0 simp: curDomain_def)+

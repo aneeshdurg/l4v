@@ -84,6 +84,7 @@ definition zeroed_intermediate_state :: global.kernel_state where
     ksCurThread = 0,
     ksIdleThread = 0,
     ksSchedulerAction = ResumeCurrentThread,
+    ksOQueueActive = False,
     ksInterruptState = (InterruptState 0 (K IRQInactive)),
     ksWorkUnitsCompleted = 0,
     ksArchState = zeroed_arch_intermediate_state,

@@ -68,6 +68,7 @@ newKernelState_def:
         ksCurThread = error [],
         ksIdleThread = error [],
         ksSchedulerAction = ResumeCurrentThread,
+        ksOQueueActive = False,
         ksInterruptState = error [],
         ksWorkUnitsCompleted = 0,
         ksArchState = fst (Arch.newKernelState data_start),
